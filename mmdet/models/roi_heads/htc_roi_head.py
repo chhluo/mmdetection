@@ -25,6 +25,7 @@ class HybridTaskCascadeRoIHead(CascadeRoIHead):
                  semantic_fusion=('bbox', 'mask'),
                  interleaved=True,
                  mask_info_flow=True,
+                 panoptic_on=False,
                  **kwargs):
         super(HybridTaskCascadeRoIHead,
               self).__init__(num_stages, stage_loss_weights, **kwargs)
@@ -39,6 +40,7 @@ class HybridTaskCascadeRoIHead(CascadeRoIHead):
         self.semantic_fusion = semantic_fusion
         self.interleaved = interleaved
         self.mask_info_flow = mask_info_flow
+        self.panoptic_on = panoptic_on
 
     @property
     def with_semantic(self):
@@ -351,7 +353,7 @@ class HybridTaskCascadeRoIHead(CascadeRoIHead):
             of tuple is bbox results, second element is mask results.
         """
         if self.with_semantic:
-            _, semantic_feat = self.semantic_head(x)
+            semantic_pred, semantic_feat = self.semantic_head(x)
         else:
             semantic_feat = None
 
@@ -626,3 +628,13 @@ class HybridTaskCascadeRoIHead(CascadeRoIHead):
             return [(bbox_result, segm_result)]
         else:
             return [bbox_result]
+
+    def panoptic_inference(self, bbox_pred, mask_pred, semantic_pred):
+        """[summary]
+
+        Args:
+            bbox_pred (list[list[np.array]]): [description]
+            mask_pred (list[list[list[np.array, np.bool]]]): [description]
+            semantic_pred (Tensor): shape [bs, num_class + 1, h, w]
+        """
+        pass
