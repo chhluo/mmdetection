@@ -101,8 +101,7 @@ class MSDeformAttnPixelDecoder(BaseModule):
             self.output_convs.append(o_conv)
 
         self.mask_feature = Conv2d(
-            feat_channels, out_channels, kernel_size=3, stride=1,
-            padding=0)  # ! mask2former is 0, maskformer is 1.
+            feat_channels, out_channels, kernel_size=1, stride=1, padding=0)
 
         self.num_return_feat_levels = num_return_feat_levels
 
