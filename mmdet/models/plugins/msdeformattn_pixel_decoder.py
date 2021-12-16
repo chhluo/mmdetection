@@ -52,9 +52,9 @@ class MSDeformAttnPixelDecoder(BaseModule):
             'num_levels in attn_cfgs must be at least one'
         input_proj_list = []
         # from top to down (low to high resolution)
-        for i in range(self.num_input_levels - 1,
-                       self.num_input_levels - self.num_encoder_feat_levels,
-                       -1):
+        for i in range(
+                self.num_input_levels - 1,
+                self.num_input_levels - self.num_encoder_feat_levels - 1, -1):
             input_proj = ConvModule(
                 in_channels[i],
                 feat_channels,
@@ -176,42 +176,40 @@ class MSDeformAttnPixelDecoder(BaseModule):
         for i in range(bs):
             img_h, img_w, _ = img_metas[i]['img_shape']
             padding_mask[i, :img_h, :img_w] = 0
-        valid_radio_list = []
+
+        encoder_input_list = []
         padding_mask_list = []
+        level_positional_encoding_list = []
+        valid_radio_list = []
+        spatial_shapes = []
         padding_mask = padding_mask.unsqueeze(1)
         for i in range(self.num_encoder_feat_levels):  # res5, res4, ...
-            feat = feats[self.num_input_levels - i]
+            feat = feats[self.num_input_levels - i - 1]
+            feat_projected = self.input_projs[i](feat)
             padding_mask_resized = F.interpolate(
                 padding_mask, size=feat.shape[-2:],
-                mode='nearest').to(torch.bool).suqeeze(1)
+                mode='nearest').to(torch.bool).squeeze(1)
+            pos_embed = self.postional_encoding(padding_mask_resized)
+            level_embed = self.level_encoding.weight[
+                self.num_encoder_feat_levels - i - 1]
+            level_pos_embed = level_embed.view(1, -1, 1, 1) + pos_embed
+
+            # [batch_size, c, h_i, w_i] -> [h_i * w_i, batch_size, c]
+            feat_projected = feat_projected.flatten(2).permute(2, 0, 1)
+            level_pos_embed = level_pos_embed.flatten(2).permute(2, 0, 1)
             valid_radio = self.get_valid_ratio(padding_mask_resized)
-            valid_radio_list.append(valid_radio)
-            # [batch_size, h_i, w_i] -> [batch_size, h_i * w_i]
             padding_mask_resized = padding_mask_resized.flatten(1)
+
+            encoder_input_list.append(feat_projected)
             padding_mask_list.append(padding_mask_resized)
+            level_positional_encoding_list.append(level_pos_embed)
+            valid_radio_list.append(valid_radio)
+            spatial_shapes.append(feat.shape[-2:])
+
         # [batch_size, total_num_query], total_num_query=sum([., h_i * w_i,.])
         padding_masks = torch.cat(padding_mask_list, dim=1)
         # [batch_size, num_encoder_feat_levels, 2]
         valid_radios = torch.stack(valid_radio_list, dim=1)
-
-        # feats: res2->res5
-        encoder_input_list = []
-        level_positional_encoding_list = []
-        spatial_shapes = []
-        for i in range(self.num_encoder_feat_levels):  # res5, res4, ...
-            feat = feats[self.num_input_levels - i]
-            feat_projected = self.input_projs[i](feat)
-            level_embed = self.level_encoding.weight[
-                self.num_encoder_feat_levels - i]
-            pos_embed = self.postional_encoding(feat)
-            level_pos_embed = level_embed.view(1, -1, 1, 1) + pos_embed
-            # [batch_size, c, h_i, w_i] -> [h_i * w_i, batch_size, c]
-            feat_projected = feat_projected.flatten(2).permute(2, 0, 1)
-            level_pos_embed = level_pos_embed.flatten(2).permute(2, 0, 1)
-
-            encoder_input_list.append(feat_projected)
-            level_positional_encoding_list.append(level_pos_embed)
-            spatial_shapes.append(feat.shape[-2:])
         # [total_num_query, batch_size, c]
         encoder_inputs = torch.cat(encoder_input_list, dim=0)
         level_positional_encodings = torch.cat(
@@ -245,7 +243,8 @@ class MSDeformAttnPixelDecoder(BaseModule):
         c = memory.shape[1]
 
         # res5, res4, ...
-        outs = torch.split(memory, level_start_index, dim=-1)
+        num_query_per_level = [e[0] * e[1] for e in spatial_shapes]
+        outs = torch.split(memory, num_query_per_level, dim=-1)
         outs = [
             x.reshape(bs, c, spatial_shapes[i][0], spatial_shapes[i][1])
             for i, x in enumerate(outs)
