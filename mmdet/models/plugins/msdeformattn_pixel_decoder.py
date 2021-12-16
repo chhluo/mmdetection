@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import (PLUGIN_LAYERS, Conv2d, ConvModule, kaiming_init,
-                      xavier_init)
+                      normal_init, xavier_init)
 from mmcv.cnn.bricks.transformer import (build_positional_encoding,
                                          build_transformer_layer_sequence)
 from mmcv.runner import BaseModule, ModuleList
@@ -120,6 +120,7 @@ class MSDeformAttnPixelDecoder(BaseModule):
             kaiming_init(self.output_convs[i].conv.weight, a=1)
 
         kaiming_init(self.mask_feature, a=1)
+        normal_init(self.level_encoding, mean=0, std=1)
 
     def get_valid_ratio(self, mask):
         """Get the valid radios of feature maps of all  level."""
