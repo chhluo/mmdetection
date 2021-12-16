@@ -77,7 +77,7 @@ class MSDeformAttnPixelDecoder(BaseModule):
         self.output_convs = ModuleList()
         self.use_bias = norm_cfg is None
         # from top to down (low to high resolution)
-        # rest features that didn't pass in encoder
+        # fpn for the rest features that didn't pass in encoder
         for i in range(
                 self.num_input_levels - self.num_encoder_feat_levels - 1, 0,
                 -1):
