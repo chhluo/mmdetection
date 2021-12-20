@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import torch
+import torch.nn.functional as F
 
 from mmdet.core.bbox.iou_calculators import bbox_overlaps
 from mmdet.core.bbox.transforms import bbox_cxcywh_to_xyxy, bbox_xyxy_to_cxcywh
@@ -268,3 +269,37 @@ class MaskFocalLossCost(FocalLossCost):
         cls_cost = torch.einsum('nc,mc->nm', pos_cost, gt_labels) + \
             torch.einsum('nc,mc->nm', neg_cost, (1 - gt_labels))
         return cls_cost / hw * self.weight
+
+
+@MATCH_COST.register_module()
+class BinaryCrossEntropyLossCost:
+    """BinaryCrossEntropyLossCost.
+
+    Args:
+        weight (int | float, optional): loss weight. Defaults to 1..
+    """
+
+    def __init__(self, weight=1.):
+        self.weight = weight
+
+    def __call__(self, cls_pred, gt_labels):
+        """
+        Args:
+            cls_pred (Tensor): Predicted classification logits in
+                shape (N1, D1, D2, ...).
+            gt_labels (Tensor): Labels in shape (N2, D1, D2, ...).
+
+        Returns:
+            torch.Tensor: binary cross-entropy cost matrix in
+                shape (N1, N2).
+        """
+        cls_pred = cls_pred.flatten(1).float()
+        gt_labels = gt_labels.flatten(1).float()
+        pos = F.binary_cross_entropy_with_logits(
+            cls_pred, torch.ones_like(cls_pred), reduction='none')
+        neg = F.binary_cross_entropy_with_logits(
+            cls_pred, torch.zeros_like(cls_pred), reduction='none')
+        cls_cost = torch.einsum('nc,mc->nm', pos, gt_labels) + \
+            torch.einsum('nc,mc->nm', neg, 1 - gt_labels)
+
+        return cls_cost * self.weight
