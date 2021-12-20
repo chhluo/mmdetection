@@ -276,7 +276,7 @@ class BinaryCrossEntropyLossCost:
     """BinaryCrossEntropyLossCost.
 
     Args:
-        weight (int | float, optional): loss weight. Defaults to 1..
+        weight (int | float, optional): loss weight. Defaults to 1.
     """
 
     def __init__(self, weight=1.):
