@@ -334,13 +334,13 @@ class CrossEntropyLossCost:
             Tensor: Cross entropy cost matrix in shape (num_query, num_gt).
         """
         num_query = cls_pred.shape[0]
-        N2 = gt_labels.shape[0]
+        num_gt = gt_labels.shape[0]
         cls_pred = cls_pred.flatten(2).unsqueeze(1).repeat(
-            (1, N2, 1, 1)).flatten(0, 1)
+            (1, num_gt, 1, 1)).flatten(0, 1)
         gt_labels = gt_labels.flatten(1).unsqueeze(0).repeat(num_query, 1,
                                                              1).flatten(0, 1)
         cls_cost = F.cross_entropy(cls_pred, gt_labels, reduction='none')
-        cls_cost = cls_cost.sum(-1).reshape((num_query, N2))
+        cls_cost = cls_cost.sum(-1).reshape((num_query, num_gt))
 
         return cls_cost
 
