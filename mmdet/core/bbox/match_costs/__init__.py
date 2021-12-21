@@ -5,5 +5,5 @@ from .match_cost import (BBoxL1Cost, ClassificationCost, CrossEntropyLossCost,
 
 __all__ = [
     'build_match_cost', 'ClassificationCost', 'BBoxL1Cost', 'IoUCost',
-    'FocalLossCost', 'DiceCost', 'MaskFocalLossCost', 'CrossEntropyLossCost'
+    'FocalLossCost', 'DiceCost', 'CrossEntropyLossCost', 'MaskFocalLossCost'
 ]

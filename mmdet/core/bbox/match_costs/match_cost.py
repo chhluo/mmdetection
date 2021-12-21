@@ -205,16 +205,16 @@ class DiceCost:
     def binary_mask_dice_loss(self, mask_preds, gt_masks):
         """
         Args:
-            mask_preds (Tensor): Mask prediction in shape (N1, H, W).
-            gt_masks (Tensor): Ground truth in shape (N2, H, W)
+            mask_preds (Tensor): Mask prediction in shape (num_query, *).
+            gt_masks (Tensor): Ground truth in shape (num_gt, *)
                 store 0 or 1, 0 for negative class and 1 for
                 positive class.
 
         Returns:
-            Tensor: Dice cost matrix in shape (N1, N2).
+            Tensor: Dice cost matrix in shape (num_query, num_gt).
         """
-        mask_preds = mask_preds.reshape((mask_preds.shape[0], -1))
-        gt_masks = gt_masks.reshape((gt_masks.shape[0], -1)).float()
+        mask_preds = mask_preds.flatten(1)
+        gt_masks = gt_masks.flatten(1).float()
         numerator = 2 * torch.einsum('nc,mc->nm', mask_preds, gt_masks)
         denominator = mask_preds.sum(-1)[:, None] + gt_masks.sum(-1)[None, :]
         loss = 1 - (numerator + self.eps) / (denominator + self.eps)
@@ -223,13 +223,11 @@ class DiceCost:
     def __call__(self, mask_preds, gt_masks):
         """
         Args:
-            mask_preds (Tensor): Mask prediction logits in shape (N1, H, W)
-                or shape (N1, P).
-            gt_masks (Tensor): Ground truth in shape (N2, H, W)
-                or shape (N2, P).
+            mask_preds (Tensor): Mask prediction logits in shape (num_query, *)
+            gt_masks (Tensor): Ground truth in shape (num_gt, *)
 
         Returns:
-            Tensor: Dice cost matrix in shape (N1, N2).
+            Tensor: Dice cost matrix with weight in shape (num_query, num_gt).
         """
         if self.pred_act:
             mask_preds = mask_preds.sigmoid()
@@ -252,16 +250,17 @@ class MaskFocalLossCost(FocalLossCost):
         """
         Args:
             cls_pred (Tensor): Predicted classfication logits
-                in shape (N1, H, W), dtype=torch.float32.
-            gt_labels (Tensor): Ground truth in shape (N2, H, W),
+                in shape (num_query, *), dtype=torch.float32.
+            gt_labels (Tensor): Ground truth in shape (num_gt, *),
                 dtype=torch.long.
 
         Returns:
-            Tensor: classification cost matrix in shape (N1, N2).
+            Tensor: Focal cost matrix with weight in shape
+                (num_query, num_gt).
         """
-        cls_pred = cls_pred.reshape((cls_pred.shape[0], -1))
-        gt_labels = gt_labels.reshape((gt_labels.shape[0], -1)).float()
-        hw = cls_pred.shape[1]
+        cls_pred = cls_pred.flatten(1)
+        gt_labels = gt_labels.flatten(1).float()
+        n = cls_pred.shape[1]
         cls_pred = cls_pred.sigmoid()
         neg_cost = -(1 - cls_pred + self.eps).log() * (
             1 - self.alpha) * cls_pred.pow(self.gamma)
@@ -270,7 +269,7 @@ class MaskFocalLossCost(FocalLossCost):
 
         cls_cost = torch.einsum('nc,mc->nm', pos_cost, gt_labels) + \
             torch.einsum('nc,mc->nm', neg_cost, (1 - gt_labels))
-        return cls_cost / hw * self.weight
+        return cls_cost / n * self.weight
 
 
 @MATCH_COST.register_module()
@@ -304,13 +303,13 @@ class CrossEntropyLossCost:
     def _binary_cross_entropy(self, cls_pred, gt_labels):
         """
         Args:
-            cls_pred (Tensor): The prediction with shape (N1, *, 1) or
-                (N1, *).
+            cls_pred (Tensor): The prediction with shape (num_query, 1, *) or
+                (num_query, *).
             gt_labels (Tensor): The learning label of prediction with
-                shape (N2, *).
+                shape (num_gt, *).
 
         Returns:
-            Tensor: Cross entropy cost matrix in shape (N1, N2).
+            Tensor: Cross entropy cost matrix in shape (num_query, num_gt).
         """
         cls_pred = cls_pred.flatten(1).float()
         gt_labels = gt_labels.flatten(1).float()
@@ -326,22 +325,22 @@ class CrossEntropyLossCost:
     def _cross_entropy(self, cls_pred, gt_labels):
         """
         Args:
-            cls_pred (Tensor): The prediction with shape (N1, C, *),
+            cls_pred (Tensor): The prediction with shape (num_query, C, *),
                 C is num_class.
             gt_labels (Tensor): The learning label of prediction with
-                shape (N2, *).
+                shape (num_gt, *).
 
         Returns:
-            Tensor: Cross entropy cost matrix in shape (N1, N2).
+            Tensor: Cross entropy cost matrix in shape (num_query, num_gt).
         """
-        N1 = cls_pred.shape[0]
+        num_query = cls_pred.shape[0]
         N2 = gt_labels.shape[0]
         cls_pred = cls_pred.flatten(2).unsqueeze(1).repeat(
             (1, N2, 1, 1)).flatten(0, 1)
-        gt_labels = gt_labels.flatten(1).unsqueeze(0).repeat(N1, 1,
+        gt_labels = gt_labels.flatten(1).unsqueeze(0).repeat(num_query, 1,
                                                              1).flatten(0, 1)
         cls_cost = F.cross_entropy(cls_pred, gt_labels, reduction='none')
-        cls_cost = cls_cost.sum(-1).reshape((N1, N2))
+        cls_cost = cls_cost.sum(-1).reshape((num_query, N2))
 
         return cls_cost
 
@@ -352,7 +351,8 @@ class CrossEntropyLossCost:
             gt_labels (Tensor): Labels.
 
         Returns:
-            Tensor: Cross entropy cost matrix in shape (N1, N2).
+            Tensor: Cross entropy cost matrix with weight in
+                shape (num_query, num_gt).
         """
         if self.use_sigmoid:
             cls_cost = self._binary_cross_entropy(cls_pred, gt_labels)
