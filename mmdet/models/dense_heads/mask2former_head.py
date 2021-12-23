@@ -163,8 +163,8 @@ class Mask2FormerHead(MaskFormerHead):
                                                         1)).squeeze(1)
         # shape [num_gts, num_points]
         gt_points_masks = point_sample(
-            gt_masks.unsqueeze(1), point_coords.repeat(num_gts, 1,
-                                                       1)).squeeze(1)
+            gt_masks.unsqueeze(1).float(), point_coords.repeat(num_gts, 1,
+                                                               1)).squeeze(1)
 
         # assign and sample
         assign_result = self.assigner.assign(cls_score, mask_points_pred,
@@ -236,7 +236,7 @@ class Mask2FormerHead(MaskFormerHead):
 
         class_weight = cls_scores.new_ones(self.num_classes + 1)
         class_weight[-1] = self.bg_cls_weight
-        loss_cls = self.loss_bbox(
+        loss_cls = self.loss_cls(
             cls_scores,
             labels,
             label_weights,
@@ -260,7 +260,8 @@ class Mask2FormerHead(MaskFormerHead):
                 self.importance_sample_ratio)
             # shape [num_gts, num_points]
             mask_point_targets = point_sample(
-                mask_targets.unsqueeze(1), points_coords).squeeze(1)
+                mask_targets.unsqueeze(1).float(),
+                points_coords).squeeze(1).long()
         # shape [num_queries, num_points]
         mask_point_preds = point_sample(
             mask_preds.unsqueeze(1), points_coords).squeeze(1)
@@ -334,7 +335,7 @@ class Mask2FormerHead(MaskFormerHead):
         point_coords = torch.rand(
             num_boxes, num_sampled, 2, device=coarse_logits.device)
         point_logits = point_sample(
-            coarse_logits, point_coords, align_corners=False)
+            coarse_logits.unsqueeze(1), point_coords, align_corners=False)
         # It is crucial to calculate uncertainty based on the sampled
         # prediction value for the points. Calculating uncertainties of
         # the coarse predictions first and sampling them for points leads
