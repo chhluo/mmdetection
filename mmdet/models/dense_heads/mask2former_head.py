@@ -493,7 +493,7 @@ class Mask2FormerHead(MaskFormerHead):
         return super().simple_test(feats, img_metas, rescale=rescale)
 
     def semantic_inference(self, mask_cls, mask_pred):
-        """Semantic segmengation inference.
+        """Semantic segmengation inference. # TODO.
 
         This implementation is modified from
             https://github.com/facebookresearch/MaskFormer
@@ -513,7 +513,7 @@ class Mask2FormerHead(MaskFormerHead):
         return semseg
 
     def panoptic_inference(self, mask_cls, mask_pred):
-        """Panoptic segmengation inference.
+        """Panoptic segmengation inference. # TODO.
 
         This implementation is modified from
             https://github.com/facebookresearch/MaskFormer
@@ -575,5 +575,5 @@ class Mask2FormerHead(MaskFormerHead):
         return panoptic_seg
 
     def instance_inference(self, mask_cls, mask_pred):
-
+        # TODO
         pass
