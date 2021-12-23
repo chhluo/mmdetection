@@ -168,29 +168,19 @@ class MSDeformAttnPixelDecoder(BaseModule):
 
     def forward(self, feats, img_metas):
         # generate padding mask for each level, for each image
-        bs = len(img_metas)
-        input_img_h, input_img_w = img_metas[0]['batch_input_shape']
-        padding_mask = feats[0].new_ones((bs, input_img_h, input_img_w),
-                                         dtype=torch.float32)
-        for i in range(bs):
-            img_h, img_w, _ = img_metas[i]['img_shape']
-            padding_mask[i, :img_h, :img_w] = 0
-
+        batch_size = len(img_metas)
         encoder_input_list = []
         padding_mask_list = []
         level_positional_encoding_list = []
         valid_radio_list = []
         spatial_shapes = []
-        padding_mask = padding_mask.unsqueeze(1)
         for i in range(self.num_encoder_feat_levels):  # res5, res4, ...
             feat = feats[self.num_input_levels - i - 1]
             feat_projected = self.input_projs[i](feat)
-            padding_mask_resized = F.interpolate(
-                padding_mask, size=feat.shape[-2:],
-                mode='nearest').to(torch.bool).squeeze(1)
+            padding_mask_resized = feat.new_zeros(
+                (batch_size, ) + feat.shape[-2:], dtype=torch.bool)
             pos_embed = self.postional_encoding(padding_mask_resized)
-            level_embed = self.level_encoding.weight[
-                self.num_encoder_feat_levels - i - 1]
+            level_embed = self.level_encoding.weight[i]
             level_pos_embed = level_embed.view(1, -1, 1, 1) + pos_embed
 
             # [batch_size, c, h_i, w_i] -> [h_i * w_i, batch_size, c]
@@ -204,7 +194,6 @@ class MSDeformAttnPixelDecoder(BaseModule):
             level_positional_encoding_list.append(level_pos_embed)
             valid_radio_list.append(valid_radio)
             spatial_shapes.append(feat.shape[-2:])
-
         # [batch_size, total_num_query], total_num_query=sum([., h_i * w_i,.])
         padding_masks = torch.cat(padding_mask_list, dim=1)
         # [batch_size, num_encoder_feat_levels, 2]
@@ -245,20 +234,22 @@ class MSDeformAttnPixelDecoder(BaseModule):
         num_query_per_level = [e[0] * e[1] for e in spatial_shapes]
         outs = torch.split(memory, num_query_per_level, dim=-1)
         outs = [
-            x.reshape(bs, c, spatial_shapes[i][0], spatial_shapes[i][1])
-            for i, x in enumerate(outs)
+            x.reshape(batch_size, c, spatial_shapes[i][0],
+                      spatial_shapes[i][1]) for i, x in enumerate(outs)
         ]
 
         for i in range(
-                self.num_input_levels - self.num_encoder_feat_levels - 1, 0,
+                self.num_input_levels - self.num_encoder_feat_levels - 1, -1,
                 -1):
             x = feats[i]
             cur_fpn = self.lateral_convs[i](x)
             y = cur_fpn + F.interpolate(
-                outs[-1], size=cur_fpn.shape[-2:], mode='nearest')
+                outs[-1],
+                size=cur_fpn.shape[-2:],
+                mode='bilinear',
+                align_corners=False)
             y = self.output_convs[i](y)
             outs.append(y)
-
         multi_scale_features = outs[:self.num_return_feat_levels]
 
         return self.mask_feature(outs[-1]), multi_scale_features
