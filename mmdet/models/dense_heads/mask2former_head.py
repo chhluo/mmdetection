@@ -78,7 +78,6 @@ class Mask2FormerHead(MaskFormerHead):
         # res5 -> res3
         self.level_embed = nn.Embedding(self.num_transformer_feat_level,
                                         feat_channels)
-        self.transformer_decoder_norm = nn.LayerNorm(self.decoder_embed_dims)
 
         self.cls_embed = nn.Linear(feat_channels, self.num_classes + 1)
         self.mask_embed = nn.Sequential(
@@ -390,7 +389,7 @@ class Mask2FormerHead(MaskFormerHead):
                 (batch_size * num_heads, num_queries, h, w).
         """
         # [nq, bs, c]
-        decoder_out = self.transformer_decoder_norm(decoder_out)
+        decoder_out = self.transformer_decoder.post_norm(decoder_out)
         # [bs, nq, c]
         decoder_out = decoder_out.transpose(0, 1)
         # [bs, nq, c]
