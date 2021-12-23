@@ -402,7 +402,7 @@ class Mask2FormerHead(MaskFormerHead):
         attn_mask = F.interpolate(
             mask_pred,
             attn_mask_target_size,
-            mode='blinear',
+            mode='bilinear',
             align_corners=False)
         # [bs, nq, h, w] -> [bs, nh, nq, h*w] -> [bs * nh, nq, h, w]
         attn_mask = attn_mask.flatten(2).unsqueeze(1).repeat(
@@ -438,11 +438,14 @@ class Mask2FormerHead(MaskFormerHead):
             decoder_input = self.decoder_input_projs[i](multi_scale_memorys[i])
             # [b, c, h, w] -> [h*w, b, c]
             decoder_input = decoder_input.flatten(2).permute(2, 0, 1)
-            level_embed = self.level_embed[i].view(1, 1, -1)
+            level_embed = self.level_embed.weight[i].view(1, 1, -1)
             decoder_input = decoder_input + level_embed
             # [b, c, h, w] -> [h*w, b, c]
+            mask = decoder_input.new_zeros(
+                (batch_size, ) + multi_scale_memorys[i].shape[-2:],
+                dtype=torch.bool)
             decoder_positional_encoding = self.decoder_positional_encoding(
-                multi_scale_memorys[i])
+                mask)
             decoder_positional_encoding = decoder_positional_encoding.flatten(
                 2).permute(2, 0, 1)
             decoder_inputs.append(decoder_input)
@@ -480,8 +483,8 @@ class Mask2FormerHead(MaskFormerHead):
                 # ! here we do not apply masking on padded region
                 key_padding_mask=None)
             cls_pred, mask_pred, attn_mask = self.forward_head(
-                query_feat, mask_features,
-                multi_scale_memorys[(i + 1) % self.num_transformer_feat_level])
+                query_feat, mask_features, multi_scale_memorys[
+                    (i + 1) % self.num_transformer_feat_level].shape[-2:])
 
             cls_pred_list.append(cls_pred)
             mask_pred_list.append(mask_pred)
