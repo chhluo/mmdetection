@@ -495,6 +495,70 @@ class Mask2FormerHead(MaskFormerHead):
         # TODO add detection result, semantic result?
         return super().simple_test(feats, img_metas, rescale=rescale)
 
+    def post_process(self, mask_cls, mask_pred):
+        """Panoptic segmengation inference.
+
+        This implementation is modified from
+            https://github.com/facebookresearch/MaskFormer
+
+        Args:
+            mask_cls (Tensor): Classfication outputs for a image.
+                shape = [num_queries, cls_out_channels].
+            mask_pred (Tensor): Mask outputs for a image.
+                shape = [num_queries, h, w].
+
+        Returns:
+            panoptic_seg (dict[str, Tensor]):
+                {'pan_results': tensor of shape = (H, W) and dtype=int32},
+                each element in Tensor means:
+                segment_id = _cls + instance_id * INSTANCE_OFFSET.
+        """
+        object_mask_thr = self.test_cfg.get('object_mask_thr', 0.8)
+        iou_thr = self.test_cfg.get('iou_thr', 0.8)
+
+        scores, labels = F.softmax(mask_cls, dim=-1).max(-1)
+        mask_pred = mask_pred.sigmoid()
+
+        keep = labels.ne(self.num_classes) & (scores > object_mask_thr)
+        cur_scores = scores[keep]
+        cur_classes = labels[keep]
+        cur_masks = mask_pred[keep]
+
+        cur_prob_masks = cur_scores.view(-1, 1, 1) * cur_masks
+
+        h, w = cur_masks.shape[-2:]
+        panoptic_seg = torch.full((h, w),
+                                  self.num_classes,
+                                  dtype=torch.int32,
+                                  device=cur_masks.device)
+        if cur_masks.shape[0] == 0:
+            # We didn't detect any mask :(
+            pass
+        else:
+            cur_mask_ids = cur_prob_masks.argmax(0)
+            instance_id = 1
+            for k in range(cur_classes.shape[0]):
+                pred_class = int(cur_classes[k].item())
+                isthing = pred_class < self.num_things_classes
+                mask = cur_mask_ids == k
+                mask_area = mask.sum().item()
+                original_area = (cur_masks[k] >= 0.5).sum().item()
+                mask = mask & (cur_masks[k] >= 0.5)
+
+                if mask_area > 0 and original_area > 0:
+                    if mask_area / original_area < iou_thr:
+                        continue
+
+                    if not isthing:
+                        # different stuff regions of same class will be
+                        # merged here, and stuff share the instance_id 0.
+                        panoptic_seg[mask] = pred_class
+                    else:
+                        panoptic_seg[mask] = (
+                            pred_class + instance_id * INSTANCE_OFFSET)
+                        instance_id += 1
+        return panoptic_seg
+
     def semantic_inference(self, mask_cls, mask_pred):
         """Semantic segmengation inference. # TODO.
 
