@@ -4,6 +4,9 @@ from .maskformer import MaskFormer
 
 @DETECTORS.register_module()
 class Mask2Former(MaskFormer):
+    r"""Implementation of `Masked-attention Mask
+    Transformer for Universal Image Segmentation
+    <https://arxiv.org/pdf/2112.01527>`_"""
 
     def __init__(self,
                  backbone,
