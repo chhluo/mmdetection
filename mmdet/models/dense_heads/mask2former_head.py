@@ -614,6 +614,46 @@ class Mask2FormerHead(MaskFormerHead):
         Returns:
              TODO
         """
-        # max_dets_per_image = self.test_cfg.get('max_dets_per_image', 100)
-        # panoptic_on = self.test_cfg.get('panoptic_on', False)
-        pass
+        max_dets_per_image = self.test_cfg.get('max_dets_per_image', 100)
+        panoptic_on = self.test_cfg.get('panoptic_on', False)
+
+        # shape (num_queries, num_class)
+        scores = F.softmax(mask_cls, dim=-1)[:, :-1]
+        # shape (num_queries * num_class, )
+        labels = torch.arange(self.num_classes, device=mask_cls.device).\
+            unsqueeze(0).repeat(self.num_queries, 1).flatten(0, 1)
+        scores_per_image, top_indices = scores.flatten(0, 1).topk(
+            max_dets_per_image, sorted=False)
+        labels_per_image = labels[top_indices]
+
+        query_indices = top_indices // self.num_classes
+        mask_pred = mask_pred[query_indices]
+
+        # if this is panoptic segmentation, we only keep the "thing" classes
+        if panoptic_on:
+            is_thing = labels_per_image < self.num_things_classes
+            scores_per_image = scores_per_image[is_thing]
+            labels_per_image = labels_per_image[is_thing]
+            mask_pred = mask_pred[is_thing]
+
+        mask_pred_binary = (mask_pred > 0.5).float()
+        mask_scores_per_image = (mask_pred.sigmoid() *
+                                 mask_pred_binary).flatten(1).sum(1) / (
+                                     mask_pred_binary.flatten(1).sum(1) + 1e-6)
+        det_scores = scores_per_image * mask_scores_per_image
+        # instance mask
+        instance_masks = [[] for _ in range(self.num_things_classes)]
+        bboxes = [[] for _ in range(self.num_things_classes)]
+        for i, label in enumerate(labels_per_image):
+            mask = mask_pred_binary[i].detach().cpu().numpy()
+            instance_masks[label].append(mask)
+            # TODO
+            bbox = torch.cat([torch.zeros(4), det_scores[i]], dim=0)
+            bbox = bbox.detach().cpu().numpy()
+            bboxes[label].append(bbox)
+
+        dets = [(np.concatenate(bbox_per_class, axis=0) if len(bbox_per_class)
+                 else np.zeros((0, 5), dtype=np.float32))
+                for bbox_per_class in bboxes]
+
+        return dets, instance_masks
