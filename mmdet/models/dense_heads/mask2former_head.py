@@ -302,8 +302,7 @@ class Mask2FormerHead(MaskFormerHead):
 
         with torch.no_grad():
             points_coords = self._get_uncertain_point_coords_with_randomness(
-                mask_preds, self.num_points, self.oversample_ratio,
-                self.importance_sample_ratio)
+                mask_preds)
             # shape (num_total_gts, h, w) -> (num_total_gts, num_points)
             mask_point_targets = point_sample(
                 mask_targets.unsqueeze(1).float(), points_coords).squeeze(1)
