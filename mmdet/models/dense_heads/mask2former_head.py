@@ -10,7 +10,7 @@ from mmcv.cnn.bricks.transformer import (build_positional_encoding,
 from mmcv.ops import point_sample
 from mmcv.runner import ModuleList
 
-from mmdet.core import build_assigner, build_sampler, reduce_mean
+from mmdet.core import bbox2result, build_assigner, build_sampler, reduce_mean
 from mmdet.datasets.coco_panoptic import INSTANCE_OFFSET
 from ..builder import HEADS, build_loss
 from .anchor_free_head import AnchorFreeHead
@@ -521,8 +521,80 @@ class Mask2FormerHead(MaskFormerHead):
         return cls_pred_list, mask_pred_list
 
     def simple_test(self, feats, img_metas, rescale=False):
-        # TODO add detection result, semantic result?
-        return super().simple_test(feats, img_metas, rescale=rescale)
+        """Test segment without test-time aumengtation.
+
+        Only the output of last decoder layers was used.
+
+        Args:
+            feats (list[Tensor]): Multi-level features from the
+                upstream network, each is a 4D-tensor.
+            img_metas (list[dict]): List of image information.
+            rescale (bool, optional):  If True, return boxes in
+                original image space. Default False.
+
+        Returns:
+            list[dict[str, np.array]]: semantic segmentation results
+                and panoptic segmentation results for each image.
+                [
+                    {
+                        'pan_results': np.array, # shape = [h, w]
+                        'ins_results': tuple[list, list],
+                        'sem_results': np.array
+                    },
+                    ...
+                ]
+        """
+        panoptic_on = self.test_cfg.get('panoptic_on', True)
+        semantic_on = self.test_cfg.get('semantic_on', False)
+        instance_on = self.test_cfg.get('instance_on', False)
+
+        all_cls_scores, all_mask_preds = self(feats, img_metas)
+        mask_cls_results = all_cls_scores[-1]
+        mask_pred_results = all_mask_preds[-1]
+
+        # upsample masks
+        img_shape = img_metas[0]['batch_input_shape']
+        mask_pred_results = F.interpolate(
+            mask_pred_results,
+            size=(img_shape[0], img_shape[1]),
+            mode='bilinear',
+            align_corners=False)
+
+        results = []
+        for mask_cls_result, mask_pred_result, meta in zip(
+                mask_cls_results, mask_pred_results, img_metas):
+            # remove padding
+            img_height, img_width = meta['img_shape'][:2]
+            mask_pred_result = mask_pred_result[:, :img_height, :img_width]
+
+            if rescale:
+                # return result in original resolution
+                ori_height, ori_width = meta['ori_shape'][:2]
+                mask_pred_result = F.interpolate(mask_pred_result.unsqueeze(1),
+                                                 size=(ori_height, ori_width),
+                                                 mode='bilinear',
+                                                 align_corners=False)\
+                    .squeeze(1)
+
+            result = dict()
+            if panoptic_on:
+                pan_results = self.panoptic_postprocess(
+                    mask_cls_result, mask_pred_result)
+                result['pan_results'] = pan_results
+
+            if instance_on:
+                ins_results = self.instance_postprocess(
+                    mask_cls_result, mask_pred_result)
+                result['ins_results'] = ins_results
+
+            if semantic_on:
+                sem_results = self.semantic_postprocess(
+                    mask_cls_result, mask_pred_result)
+                result['sem_results'] = sem_results
+
+            results.append(result)
+
+        return results
 
     def semantic_postprocess(self, mask_cls, mask_pred):
         """Semantic segmengation postprocess.
@@ -600,6 +672,8 @@ class Mask2FormerHead(MaskFormerHead):
                         panoptic_seg[mask] = (
                             pred_class + instance_id * INSTANCE_OFFSET)
                         instance_id += 1
+        panoptic_seg = panoptic_seg.detach().cpu().numpy()
+
         return panoptic_seg
 
     def instance_postprocess(self, mask_cls, mask_pred):
@@ -612,10 +686,12 @@ class Mask2FormerHead(MaskFormerHead):
                 for a image.
 
         Returns:
-             TODO
+             tuple[Tensor]: instance segmentation results.
+
+                - bbox_results (Tensor): bounding boxes of shape (N, 5).
+                - mask_results (Tensor): instance masks of shape (N, h, w).
         """
         max_dets_per_image = self.test_cfg.get('max_dets_per_image', 100)
-        panoptic_on = self.test_cfg.get('panoptic_on', False)
 
         # shape (num_queries, num_class)
         scores = F.softmax(mask_cls, dim=-1)[:, :-1]
@@ -629,31 +705,49 @@ class Mask2FormerHead(MaskFormerHead):
         query_indices = top_indices // self.num_classes
         mask_pred = mask_pred[query_indices]
 
-        # if this is panoptic segmentation, we only keep the "thing" classes
-        if panoptic_on:
-            is_thing = labels_per_image < self.num_things_classes
-            scores_per_image = scores_per_image[is_thing]
-            labels_per_image = labels_per_image[is_thing]
-            mask_pred = mask_pred[is_thing]
+        # extract things
+        is_thing = labels_per_image < self.num_things_classes
+        scores_per_image = scores_per_image[is_thing]
+        labels_per_image = labels_per_image[is_thing]
+        mask_pred = mask_pred[is_thing]
 
         mask_pred_binary = (mask_pred > 0.5).float()
         mask_scores_per_image = (mask_pred.sigmoid() *
                                  mask_pred_binary).flatten(1).sum(1) / (
                                      mask_pred_binary.flatten(1).sum(1) + 1e-6)
         det_scores = scores_per_image * mask_scores_per_image
-        # instance mask
-        instance_masks = [[] for _ in range(self.num_things_classes)]
-        bboxes = [[] for _ in range(self.num_things_classes)]
+        mask_pred_binary = mask_pred_binary.bool()
+        bboxes = self.mask2bbox(mask_pred_binary)
+        bboxes = torch.cat([bboxes, det_scores[:, None]], dim=-1)
+        bbox_results = bbox2result(bboxes, labels_per_image,
+                                   self.num_things_classes)
+
+        mask_results = [[] for _ in range(self.num_things_classes)]
         for i, label in enumerate(labels_per_image):
             mask = mask_pred_binary[i].detach().cpu().numpy()
-            instance_masks[label].append(mask)
-            # TODO
-            bbox = torch.cat([torch.zeros(4), det_scores[i]], dim=0)
-            bbox = bbox.detach().cpu().numpy()
-            bboxes[label].append(bbox)
+            mask_results[label].append(mask)
 
-        dets = [(np.concatenate(bbox_per_class, axis=0) if len(bbox_per_class)
-                 else np.zeros((0, 5), dtype=np.float32))
-                for bbox_per_class in bboxes]
+        return bbox_results, mask_results
 
-        return dets, instance_masks
+    def mask2bbox(self, masks):
+        """tight bounding boxes around mask.
+
+        Args:
+            masks (Tensor): binary mask of shape (N, h, w).
+
+        Returns:
+            bboxes (Tensor): bboxe with shape (N, 4) of positive region
+                in binary mask.
+        """
+        N = masks.shape[0]
+        bboxes = torch.zeros((N, 4), dtype=torch.float32, device=masks.device)
+        x_any = torch.any(masks, dim=1)
+        y_any = torch.any(masks, dim=2)
+        for i in range(N):
+            x = torch.where(x_any[i, :])[0]
+            y = torch.where(y_any[i, :])[0]
+            if len(x) > 0 and len(y) > 0:
+                bboxes[i, :] = torch.as_tensor(
+                    [x[0], y[0], x[-1] + 1, y[-1] + 1], dtype=torch.float32)
+
+        return bboxes
