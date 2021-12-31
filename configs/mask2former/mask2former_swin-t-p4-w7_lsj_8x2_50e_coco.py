@@ -1,4 +1,4 @@
-_base_ = ['./mask2former_r50_mstrain_8x2_50e_coco.py']
+_base_ = ['./mask2former_r50_lsj_8x2_50e_coco.py']
 pretrained = 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth'  # noqa
 model = dict(
     type='Mask2Former',
