@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import torch
 
 from mmdet.core.bbox.builder import BBOX_ASSIGNERS
@@ -49,8 +50,8 @@ class MaskHungarianAssigner(BaseAssigner):
         """Computes one-to-one matching based on the weighted costs.
 
         Args:
-            cls_pred (Tensor): Class prediction in shape (N1, ),
-                N1 is the number of queries.
+            cls_pred (Tensor): Class prediction in shape
+                (N1, cls_out_channels), N1 is the number of queries.
             mask_pred (Tensor): Mask prediction in shape (N1, H, W).
             gt_labels (Tensor): Label of 'gt_mask'in shape = (N2, ), N2
                 is the number of labels.
