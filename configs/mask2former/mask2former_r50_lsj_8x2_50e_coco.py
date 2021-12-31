@@ -119,8 +119,7 @@ model = dict(
         panoptic_on=True,
         # the dataset doesn't support the evaluation of semantic segmentation.
         semantic_on=False,
-        # panoptic and instance segmentation results cost a lots of memory
-        instance_on=False,
+        instance_on=True,
         max_dets_per_image=100,
         object_mask_thr=0.8,
         iou_thr=0.8),
