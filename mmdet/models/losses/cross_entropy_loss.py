@@ -106,7 +106,8 @@ def binary_cross_entropy(pred,
             label, weight = _expand_onehot_labels(label, weight, pred.size(-1),
                                                   ignore_index)
     else:
-        assert pred.dim() == label.dim()
+        assert pred.shape == label.shape, 'pred and label '\
+            'should have same shape'
 
     # weighted element-wise losses
     if weight is not None:
