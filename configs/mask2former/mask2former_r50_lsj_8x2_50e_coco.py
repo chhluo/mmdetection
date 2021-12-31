@@ -174,6 +174,7 @@ test_pipeline = [
             dict(type='Collect', keys=['img']),
         ])
 ]
+data_root = 'data/coco/'
 data = dict(
     samples_per_gpu=1,
     workers_per_gpu=1,
@@ -181,8 +182,15 @@ data = dict(
     # samples_per_gpu=2,
     # workers_per_gpu=2,
     train=dict(pipeline=train_pipeline),
-    val=dict(pipeline=test_pipeline),
-    test=dict(pipeline=test_pipeline))
+    val=dict(
+        pipeline=test_pipeline,
+        ins_ann_file=data_root + 'annotations/instances_val2017.json',
+    ),
+    test=dict(
+        pipeline=test_pipeline,
+        ins_ann_file=data_root + 'annotations/instances_val2017.json',
+    ),
+)
 
 # optimizer
 optimizer = dict(
