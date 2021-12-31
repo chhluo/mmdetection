@@ -189,8 +189,7 @@ data = dict(
     test=dict(
         pipeline=test_pipeline,
         ins_ann_file=data_root + 'annotations/instances_val2017.json',
-    ),
-)
+    ))
 
 # optimizer
 optimizer = dict(
