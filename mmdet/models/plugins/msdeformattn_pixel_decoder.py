@@ -11,7 +11,27 @@ from mmcv.runner import BaseModule, ModuleList
 
 @PLUGIN_LAYERS.register_module()
 class MSDeformAttnPixelDecoder(BaseModule):
-    """fpn msdeform encoder."""
+    """Pixel decoder with multi-scale deformable attention.
+
+    Args:
+        in_channels (list[int] | tuple[int]): Number of channels in the
+            input feature maps.
+        feat_channels (int): Number of channels for feature.
+        out_channels (int): Number of channels for output.
+        num_return_feat_levels (int): Number of levels features to
+            return.
+        norm_cfg (obj:`mmcv.ConfigDict`|dict): Config for normalization.
+            Defaults to dict(type='GN', num_groups=32).
+        act_cfg (obj:`mmcv.ConfigDict`|dict): Config for activation.
+            Defaults to dict(type='ReLU').
+        encoder (obj:`mmcv.ConfigDict`|dict): Config for transorformer
+            encoder.Defaults to None.
+        positional_encoding (obj:`mmcv.ConfigDict`|dict): Config for
+            transformer encoder position encoding. Defaults to
+            dict(type='SinePositionalEncoding', num_feats=128,
+            normalize=True).
+        init_cfg (obj:`mmcv.ConfigDict`|dict):  Initialization config dict.
+    """
 
     def __init__(self,
                  in_channels=[256, 512, 1024, 2048],
@@ -69,7 +89,7 @@ class MSDeformAttnPixelDecoder(BaseModule):
         self.encoder = build_transformer_layer_sequence(encoder)
         self.postional_encoding = build_positional_encoding(
             positional_encoding)
-        # res_i -> res_5
+        # high resolution to low resolution
         self.level_encoding = nn.Embedding(self.num_encoder_feat_levels,
                                            feat_channels)
 
@@ -168,6 +188,20 @@ class MSDeformAttnPixelDecoder(BaseModule):
         return reference_points
 
     def forward(self, feats, img_metas):
+        """
+        Args:
+            feats (list[Tensor]): Feature maps of each level. Each has
+                shape of (batch_size, c, h, w).
+            img_metas (list[dict]): List of image information. Pass in
+                for creating more accurate padding mask.
+
+        Returns:
+            tuple: a tuple containing the following:
+
+                - mask_feature (Tensor): shape (batch_size, c, h, w).
+                - multi_scale_features (list[Tensor]): Multi scale features,
+                    each in shape (batch_size, c, h, w).
+        """
         # generate padding mask for each level, for each image
         batch_size = len(img_metas)
         encoder_input_list = []
@@ -175,7 +209,7 @@ class MSDeformAttnPixelDecoder(BaseModule):
         level_positional_encoding_list = []
         valid_radio_list = []
         spatial_shapes = []
-        for i in range(self.num_encoder_feat_levels):  # res5, res4, ...
+        for i in range(self.num_encoder_feat_levels):
             feat = feats[self.num_input_levels - i - 1]
             feat_projected = self.input_projs[i](feat)
             padding_mask_resized = feat.new_zeros(
@@ -184,7 +218,7 @@ class MSDeformAttnPixelDecoder(BaseModule):
             level_embed = self.level_encoding.weight[i]
             level_pos_embed = level_embed.view(1, -1, 1, 1) + pos_embed
 
-            # [batch_size, c, h_i, w_i] -> [h_i * w_i, batch_size, c]
+            # shape (batch_size, c, h_i, w_i) -> (h_i * w_i, batch_size, c)
             feat_projected = feat_projected.flatten(2).permute(2, 0, 1)
             level_pos_embed = level_pos_embed.flatten(2).permute(2, 0, 1)
             valid_radio = self.get_valid_ratio(padding_mask_resized)
@@ -195,25 +229,27 @@ class MSDeformAttnPixelDecoder(BaseModule):
             level_positional_encoding_list.append(level_pos_embed)
             valid_radio_list.append(valid_radio)
             spatial_shapes.append(feat.shape[-2:])
-        # [batch_size, total_num_query], total_num_query=sum([., h_i * w_i,.])
+        # shape (batch_size, total_num_query),
+        # total_num_query=sum([., h_i * w_i,.])
         padding_masks = torch.cat(padding_mask_list, dim=1)
-        # [batch_size, num_encoder_feat_levels, 2]
+        # shape (batch_size, num_encoder_feat_levels, 2)
         valid_radios = torch.stack(valid_radio_list, dim=1)
-        # [total_num_query, batch_size, c]
+        # shape (total_num_query, batch_size, c)
         encoder_inputs = torch.cat(encoder_input_list, dim=0)
         level_positional_encodings = torch.cat(
             level_positional_encoding_list, dim=0)
         device = encoder_inputs.device
-        # [num_encoder_feat_levels, 2], res5, res4, ...
+        # shape (num_encoder_feat_levels, 2), from low
+        # resolution to high resolution
         spatial_shapes = torch.as_tensor(
             spatial_shapes, dtype=torch.long, device=device)
-        # [0, h_0*w_0, h_0*w_0+h_1*w_1, ...]
+        # shape (0, h_0*w_0, h_0*w_0+h_1*w_1, ...)
         level_start_index = torch.cat((spatial_shapes.new_zeros(
             (1, )), spatial_shapes.prod(1).cumsum(0)[:-1]))
         reference_points = self.get_reference_points(
             spatial_shapes, valid_radios, device=device)
 
-        # [num_total_query, batch_size, c]
+        # shape (num_total_query, batch_size, c)
         memory = self.encoder(
             query=encoder_inputs,
             key=None,
@@ -227,11 +263,11 @@ class MSDeformAttnPixelDecoder(BaseModule):
             reference_points=reference_points,
             level_start_index=level_start_index,
             valid_radios=valid_radios)
-        # [num_total_query, batch_size, c] -> [batch_size, c, num_total_query]
+        # (num_total_query, batch_size, c) -> (batch_size, c, num_total_query)
         memory = memory.permute(1, 2, 0)
         c = memory.shape[1]
 
-        # res5, res4, ...
+        # from low resolution to high resolution
         num_query_per_level = [e[0] * e[1] for e in spatial_shapes]
         outs = torch.split(memory, num_query_per_level, dim=-1)
         outs = [
@@ -253,4 +289,5 @@ class MSDeformAttnPixelDecoder(BaseModule):
             outs.append(y)
         multi_scale_features = outs[:self.num_return_feat_levels]
 
-        return self.mask_feature(outs[-1]), multi_scale_features
+        mask_feature = self.mask_feature(outs[-1])
+        return mask_feature, multi_scale_features
