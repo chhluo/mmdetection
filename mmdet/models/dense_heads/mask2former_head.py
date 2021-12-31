@@ -546,6 +546,8 @@ class Mask2FormerHead(MaskFormerHead):
         panoptic_on = self.test_cfg.get('panoptic_on', True)
         semantic_on = self.test_cfg.get('semantic_on', False)
         instance_on = self.test_cfg.get('instance_on', False)
+        assert not semantic_on, 'segmantic segmentation '\
+            'results are not supported yet.'
 
         all_cls_scores, all_mask_preds = self(feats, img_metas)
         mask_cls_results = all_cls_scores[-1]
@@ -608,10 +610,8 @@ class Mask2FormerHead(MaskFormerHead):
             semseg (Tensor): Semantic segment result of shape
                 (cls_out_channels, h, w).
         """
-        mask_cls = F.softmax(mask_cls, dim=-1)[..., :-1]
-        mask_pred = mask_pred.sigmoid()
-        semseg = torch.einsum('qc,qhw->chw', mask_cls, mask_pred)
-        return semseg
+        # TODO add semantic segmentation result
+        raise NotImplementedError
 
     def panoptic_postprocess(self, mask_cls, mask_pred):
         """Panoptic segmengation inference.
@@ -710,7 +710,7 @@ class Mask2FormerHead(MaskFormerHead):
         labels_per_image = labels_per_image[is_thing]
         mask_pred = mask_pred[is_thing]
 
-        mask_pred_binary = (mask_pred > 0.5).float()
+        mask_pred_binary = (mask_pred > 0).float()
         mask_scores_per_image = (mask_pred.sigmoid() *
                                  mask_pred_binary).flatten(1).sum(1) / (
                                      mask_pred_binary.flatten(1).sum(1) + 1e-6)
