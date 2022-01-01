@@ -176,11 +176,8 @@ test_pipeline = [
 ]
 data_root = 'data/coco/'
 data = dict(
-    samples_per_gpu=1,
-    workers_per_gpu=1,
-    # TODO
-    # samples_per_gpu=2,
-    # workers_per_gpu=2,
+    samples_per_gpu=2,
+    workers_per_gpu=2,
     train=dict(pipeline=train_pipeline),
     val=dict(
         pipeline=test_pipeline,
