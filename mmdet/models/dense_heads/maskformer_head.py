@@ -8,9 +8,9 @@ from mmcv.cnn.bricks.transformer import (build_positional_encoding,
 from mmcv.runner import force_fp32
 
 from mmdet.core import build_assigner, build_sampler, multi_apply, reduce_mean
-from mmdet.datasets.coco_panoptic import INSTANCE_OFFSET
+from mmdet.models.utils import INSTANCE_OFFSET
 from ..builder import HEADS, build_loss
-from ..dense_heads.anchor_free_head import AnchorFreeHead
+from .anchor_free_head import AnchorFreeHead
 
 
 @HEADS.register_module()
@@ -157,7 +157,7 @@ class MaskFormerHead(AnchorFreeHead):
         Args:
             gt_labels_list (list[Tensor]): Each is ground truth
                 labels of each bbox, with shape (num_gts, ).
-            gt_masks_list (list[Tensor]): Each is ground truth
+            gt_masks_list (list[BitmapMasks]): Each is ground truth
                 masks of each instances of a image, shape
                 (num_gts, h, w).
             gt_semantic_seg (Tensor): Ground truth of semantic
@@ -188,7 +188,7 @@ class MaskFormerHead(AnchorFreeHead):
         Args:
             gt_labels (Tensor): Ground truth labels of each bbox,
                 with shape (num_gts, ).
-            gt_masks (Tensor): Ground truth masks of each instances
+            gt_masks (BitmapMasks): Ground truth masks of each instances
                 of a image, shape (num_gts, h, w).
             gt_semantic_seg (Tensor): Ground truth of semantic
                 segmentation with the shape (1, h, w).
@@ -315,9 +315,13 @@ class MaskFormerHead(AnchorFreeHead):
                 - neg_inds (Tensor): Sampled negative indices for each image.
         """
         target_shape = mask_pred.shape[-2:]
-        gt_masks_downsampled = F.interpolate(
-            gt_masks.unsqueeze(1).float(), target_shape,
-            mode='nearest').squeeze(1).long()
+        if gt_masks.shape[0] > 0:
+            gt_masks_downsampled = F.interpolate(
+                gt_masks.unsqueeze(1).float(), target_shape,
+                mode='nearest').squeeze(1).long()
+        else:
+            gt_masks_downsampled = gt_masks
+
         # assign and sample
         assign_result = self.assigner.assign(cls_score, mask_pred, gt_labels,
                                              gt_masks_downsampled, img_metas)
