@@ -12,7 +12,7 @@ from mmcv.ops import point_sample
 from mmcv.runner import ModuleList
 
 from mmdet.core import bbox2result, build_assigner, build_sampler, reduce_mean
-from mmdet.datasets.coco_panoptic import INSTANCE_OFFSET
+from mmdet.models.utils import INSTANCE_OFFSET
 from ..builder import HEADS, build_loss
 from .anchor_free_head import AnchorFreeHead
 from .maskformer_head import MaskFormerHead
@@ -201,7 +201,7 @@ class Mask2FormerHead(MaskFormerHead):
         num_queries = cls_score.shape[0]
         num_gts = gt_labels.shape[0]
         # TODO remove it after debugging
-        setup_seed(20)
+        # setup_seed(20)
         point_coords = torch.rand((1, self.num_points, 2),
                                   device=cls_score.device)
         # shape (num_queries, num_points)
@@ -369,7 +369,7 @@ class Mask2FormerHead(MaskFormerHead):
         num_boxes = coarse_logits.shape[0]
         num_sampled = int(self.num_points * self.oversample_ratio)
         # TODO remove it after debugging
-        setup_seed(20)
+        # setup_seed(20)
         point_coords = torch.rand(
             num_boxes, num_sampled, 2, device=coarse_logits.device)
         point_logits = point_sample(
