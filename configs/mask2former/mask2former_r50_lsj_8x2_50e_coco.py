@@ -138,7 +138,7 @@ train_pipeline = [
         with_mask=True,
         with_seg=True),
     dict(type='RandomFlip', flip_ratio=0.5),
-    # large sclae jittering
+    # large scale jittering
     dict(
         type='Resize',
         img_scale=image_size,
@@ -151,7 +151,6 @@ train_pipeline = [
         crop_type='absolute',
         recompute_bbox=True,
         allow_negative_crop=True),
-    # dict(type='FilterAnnotations', min_gt_bbox_wh=(1e-2, 1e-2)),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size=image_size),
     dict(type='DefaultFormatBundle', img_to_float=True),
@@ -227,4 +226,5 @@ log_config = dict(
     ])
 workflow = [('train', 5000)]
 checkpoint_config = dict(by_epoch=False, interval=5000)
+# TODO add metric segm
 evaluation = dict(interval=5000, metric='PQ')
