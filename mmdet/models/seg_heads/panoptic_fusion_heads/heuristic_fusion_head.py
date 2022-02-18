@@ -3,7 +3,6 @@ import torch
 
 from mmdet.core.evaluation.panoptic_utils import INSTANCE_OFFSET
 from mmdet.models.builder import HEADS
-from mmdet.models.utils import INSTANCE_OFFSET
 from .base_panoptic_fusion_head import BasePanopticFusionHead
 
 

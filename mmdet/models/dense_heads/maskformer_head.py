@@ -8,7 +8,7 @@ from mmcv.cnn.bricks.transformer import (build_positional_encoding,
 from mmcv.runner import force_fp32
 
 from mmdet.core import build_assigner, build_sampler, multi_apply, reduce_mean
-from mmdet.models.utils import INSTANCE_OFFSET
+from mmdet.core.evaluation import INSTANCE_OFFSET
 from ..builder import HEADS, build_loss
 from .anchor_free_head import AnchorFreeHead
 
@@ -643,8 +643,7 @@ class MaskFormerHead(AnchorFreeHead):
                     .squeeze(1)
 
             mask = self.post_process(mask_cls_result, mask_pred_result)
-            result = {'pan_results': mask.detach().cpu().numpy()}
-            results.append(result)
+            results.append(mask)
 
         return results
 

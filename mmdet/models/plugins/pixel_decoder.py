@@ -90,7 +90,7 @@ class PixelDecoder(BaseModule):
             feats (list[Tensor]): Feature maps of each level. Each has
                 shape of (batch_size, c, h, w).
             img_metas (list[dict]): List of image information. Pass in
-                for creating more accurate padding mask. #! not used here.
+                for creating more accurate padding mask. Not used here.
 
         Returns:
             tuple: a tuple containing the following:
