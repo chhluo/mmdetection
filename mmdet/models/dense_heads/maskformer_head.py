@@ -605,11 +605,11 @@ class MaskFormerHead(AnchorFreeHead):
                 original image space. Default False.
 
         Returns:
-            list[dict[str, np.array]]: semantic segmentation results
-                and panoptic segmentation results for each image.
+            list[dict[str, np.array]]: panoptic segmentation
+                results for each image.
                 [
                     {
-                        'pan_results': np.array, # shape = [h, w]
+                        'pan_results': Tensor, shape = (h, w)
                     },
                     ...
                 ]
