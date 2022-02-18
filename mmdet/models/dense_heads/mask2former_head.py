@@ -12,7 +12,7 @@ from mmcv.ops import point_sample
 from mmcv.runner import ModuleList
 
 from mmdet.core import bbox2result, build_assigner, build_sampler, reduce_mean
-from mmdet.models.utils import INSTANCE_OFFSET
+from mmdet.core.evaluation import INSTANCE_OFFSET
 from ..builder import HEADS, build_loss
 from .anchor_free_head import AnchorFreeHead
 from .maskformer_head import MaskFormerHead

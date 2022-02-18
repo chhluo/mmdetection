@@ -13,7 +13,7 @@ from mmcv.utils import print_log
 from terminaltables import AsciiTable
 
 from mmdet.core import INSTANCE_OFFSET
-from .api_wrappers import COCO, pq_compute_multi_core
+from .api_wrappers import COCO, COCOeval, pq_compute_multi_core
 from .builder import DATASETS
 from .coco import CocoDataset
 
@@ -199,38 +199,6 @@ class CocoPanopticDataset(CocoDataset):
         'paper-merged', 'food-other-merged', 'building-other-merged',
         'rock-merged', 'wall-other-merged', 'rug-merged'
     ]
-
-<<<<<<< HEAD
-    def __init__(self,
-                 ann_file,
-                 pipeline,
-                 ins_ann_file=None,
-                 classes=None,
-                 data_root=None,
-                 img_prefix='',
-                 seg_prefix=None,
-                 proposal_file=None,
-                 test_mode=False,
-                 filter_empty_gt=True,
-                 file_client_args=dict(backend='disk')):
-        super().__init__(
-            ann_file,
-            pipeline,
-            classes=classes,
-            data_root=data_root,
-            img_prefix=img_prefix,
-            seg_prefix=seg_prefix,
-            proposal_file=proposal_file,
-            test_mode=test_mode,
-            filter_empty_gt=filter_empty_gt,
-            file_client_args=file_client_args)
-        self.ins_ann_file = ins_ann_file
-
-    def load_annotations(
-        self,
-        ann_file,
-    ):
-=======
     PALETTE = [(220, 20, 60), (119, 11, 32), (0, 0, 142), (0, 0, 230),
                (106, 0, 228), (0, 60, 100), (0, 80, 100), (0, 0, 70),
                (0, 0, 192), (250, 170, 30), (100, 170, 30), (220, 220, 0),
@@ -268,8 +236,32 @@ class CocoPanopticDataset(CocoDataset):
                (206, 186, 171), (152, 161, 64), (116, 112, 0), (0, 114, 143),
                (102, 102, 156), (250, 141, 255)]
 
+    def __init__(self,
+                 ann_file,
+                 pipeline,
+                 ins_ann_file=None,
+                 classes=None,
+                 data_root=None,
+                 img_prefix='',
+                 seg_prefix=None,
+                 proposal_file=None,
+                 test_mode=False,
+                 filter_empty_gt=True,
+                 file_client_args=dict(backend='disk')):
+        super().__init__(
+            ann_file,
+            pipeline,
+            classes=classes,
+            data_root=data_root,
+            img_prefix=img_prefix,
+            seg_prefix=seg_prefix,
+            proposal_file=proposal_file,
+            test_mode=test_mode,
+            filter_empty_gt=filter_empty_gt,
+            file_client_args=file_client_args)
+        self.ins_ann_file = ins_ann_file
+
     def load_annotations(self, ann_file):
->>>>>>> upstream/dev
         """Load annotation from COCO Panoptic style annotation file.
 
         Args:

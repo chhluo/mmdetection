@@ -25,3 +25,9 @@ class Mask2Former(MaskFormer):
             test_cfg=test_cfg,
             pretrained=pretrained,
             init_cfg=init_cfg)
+
+    def simple_test(self, img, img_metas, **kwargs):
+        """Test without augmentation."""
+        feat = self.extract_feat(img)
+        results = self.panoptic_head.simple_test(feat, img_metas, **kwargs)
+        return results
