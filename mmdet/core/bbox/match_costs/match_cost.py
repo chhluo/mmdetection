@@ -341,6 +341,6 @@ class CrossEntropyLossCost:
         if self.use_sigmoid:
             cls_cost = self._binary_cross_entropy(cls_pred, gt_labels)
         else:
-            raise 'Not implemented'
+            raise NotImplementedError
 
         return cls_cost * self.weight
