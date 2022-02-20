@@ -31,6 +31,66 @@ def test_ce_loss():
     loss_cls = build_loss(loss_cls_cfg)
     assert torch.allclose(loss_cls(fake_pred, fake_label), torch.tensor(200.))
 
+    # bce_expand_one_hot have no impact when use_sigmoid = False,
+    # use_mask = False
+    loss_cls_cfg1 = dict(
+        type='CrossEntropyLoss', use_sigmoid=False, bce_expand_one_hot=True)
+    loss_cls1 = build_loss(loss_cls_cfg1)
+    loss_cls_cfg2 = dict(
+        type='CrossEntropyLoss', use_sigmoid=False, bce_expand_one_hot=False)
+    loss_cls2 = build_loss(loss_cls_cfg2)
+    fake_pred = torch.Tensor([[100, -100]])
+    fake_label = torch.Tensor([1]).long()
+    assert torch.allclose(
+        loss_cls1(fake_pred, fake_label), loss_cls2(fake_pred, fake_label))
+
+    # bce_expand_one_hot have no impact when use_sigmoid = False,
+    # use_mask = True
+    loss_cls_cfg1 = dict(
+        type='CrossEntropyLoss',
+        use_sigmoid=False,
+        use_mask=True,
+        bce_expand_one_hot=True)
+    loss_cls1 = build_loss(loss_cls_cfg1)
+    loss_cls_cfg2 = dict(
+        type='CrossEntropyLoss',
+        use_sigmoid=False,
+        use_mask=True,
+        bce_expand_one_hot=False)
+    loss_cls2 = build_loss(loss_cls_cfg2)
+    N, C = 3, 11
+    H, W = 2, 2
+    fake_pred = torch.randn(N, C, H, W) * 1000
+    fake_target = torch.rand(N, H, W)
+    fake_label = torch.randint(0, C, size=(N, ))
+    assert torch.allclose(
+        loss_cls1(fake_pred, fake_target, fake_label),
+        loss_cls2(fake_pred, fake_target, fake_label))
+
+    # bce_expand_one_hot have no impact when use_sigmoid = True
+    loss_cls_cfg1 = dict(
+        type='CrossEntropyLoss', use_sigmoid=True, bce_expand_one_hot=True)
+    loss_cls1 = build_loss(loss_cls_cfg1)
+    fake_pred1 = torch.Tensor([[1.0]])
+    fake_label1 = torch.Tensor([1]).long()
+
+    loss_cls_cfg2 = dict(
+        type='CrossEntropyLoss', use_sigmoid=True, bce_expand_one_hot=False)
+    loss_cls2 = build_loss(loss_cls_cfg2)
+    fake_pred2 = torch.Tensor([1.0])
+    fake_label2 = torch.Tensor([1])
+    assert torch.allclose(
+        loss_cls1(fake_pred1, 1 - fake_label1),
+        loss_cls2(fake_pred2, fake_label2))
+
+    # bce_expand_one_hot = True, label can be float when use_sigmoid = True
+    loss_cls_cfg = dict(
+        type='CrossEntropyLoss', use_sigmoid=True, bce_expand_one_hot=False)
+    loss_cls = build_loss(loss_cls_cfg)
+    fake_pred = torch.Tensor([1.0])
+    fake_label = torch.Tensor([0.9])
+    assert loss_cls(fake_pred, fake_label).item() > 0
+
 
 def test_varifocal_loss():
     # only sigmoid version of VarifocalLoss is implemented
