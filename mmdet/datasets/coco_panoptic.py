@@ -140,6 +140,29 @@ class CocoPanopticDataset(CocoDataset):
             },
             ...
         ]
+
+    Args:
+        ann_file (str): Panoptic segmentation annotation file path.
+        pipeline (list[dict]): Processing pipeline.
+        ins_ann_file (str): Instance segmentation annotation file path.
+            Defaults to None.
+        classes (str | Sequence[str], optional): Specify classes to load.
+            If is None, ``cls.CLASSES`` will be used. Defaults to None.
+        data_root (str, optional): Data root for ``ann_file``,
+            ``ins_ann_file`` ``img_prefix``, ``seg_prefix``, ``proposal_file``
+            if specified. Defaults to None.
+        img_prefix (str, optional): Prefix of path to images. Defaults to ''.
+        seg_prefix (str, optional): Prefix of path to segmentation files.
+            Defaults to None.
+        proposal_file (str, optional): Path to proposal file. Defaults to None.
+        test_mode (bool, optional): If set True, annotation will not be loaded.
+            Defaults to False.
+        filter_empty_gt (bool, optional): If set true, images without bounding
+            boxes of the dataset's classes will be filtered out. This option
+            only works when `test_mode=False`, i.e., we never filter images
+            during tests. Defaults to True.
+        file_client_args (obj:`mmcv.ConfigDict` | dict): file client args.
+            Defaults to dict(backend='disk').
     """
     CLASSES = [
         'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train',
@@ -195,7 +218,6 @@ class CocoPanopticDataset(CocoDataset):
         'paper-merged', 'food-other-merged', 'building-other-merged',
         'rock-merged', 'wall-other-merged', 'rug-merged'
     ]
-
     PALETTE = [(220, 20, 60), (119, 11, 32), (0, 0, 142), (0, 0, 230),
                (106, 0, 228), (0, 60, 100), (0, 80, 100), (0, 0, 70),
                (0, 0, 192), (250, 170, 30), (100, 170, 30), (220, 220, 0),
@@ -232,6 +254,31 @@ class CocoPanopticDataset(CocoDataset):
                (96, 96, 96), (64, 170, 64), (152, 251, 152), (208, 229, 228),
                (206, 186, 171), (152, 161, 64), (116, 112, 0), (0, 114, 143),
                (102, 102, 156), (250, 141, 255)]
+
+    def __init__(self,
+                 ann_file,
+                 pipeline,
+                 ins_ann_file=None,
+                 classes=None,
+                 data_root=None,
+                 img_prefix='',
+                 seg_prefix=None,
+                 proposal_file=None,
+                 test_mode=False,
+                 filter_empty_gt=True,
+                 file_client_args=dict(backend='disk')):
+        super().__init__(
+            ann_file,
+            pipeline,
+            classes=classes,
+            data_root=data_root,
+            img_prefix=img_prefix,
+            seg_prefix=seg_prefix,
+            proposal_file=proposal_file,
+            test_mode=test_mode,
+            filter_empty_gt=filter_empty_gt,
+            file_client_args=file_client_args)
+        self.ins_ann_file = ins_ann_file
 
     def load_annotations(self, ann_file):
         """Load annotation from COCO Panoptic style annotation file.
@@ -415,10 +462,22 @@ class CocoPanopticDataset(CocoDataset):
                 corresponding filename.
         """
         result_files = dict()
-        pan_results = [result['pan_results'] for result in results]
-        pan_json_results = self._pan2json(pan_results, outfile_prefix)
-        result_files['panoptic'] = f'{outfile_prefix}.panoptic.json'
-        mmcv.dump(pan_json_results, result_files['panoptic'])
+        # panoptic segmentation results
+        if 'pan_results' in results[0]:
+            pan_results = [result['pan_results'] for result in results]
+            pan_json_results = self._pan2json(pan_results, outfile_prefix)
+            result_files['panoptic'] = f'{outfile_prefix}.panoptic.json'
+            mmcv.dump(pan_json_results, result_files['panoptic'])
+
+        # instance segmentation results
+        if 'ins_results' in results[0]:
+            ins_results = [result['ins_results'] for result in results]
+            bbox_json_results, segm_json_results = self._segm2json(ins_results)
+            result_files['bbox'] = f'{outfile_prefix}.bbox.json'
+            result_files['proposal'] = f'{outfile_prefix}.bbox.json'
+            result_files['segm'] = f'{outfile_prefix}.segm.json'
+            mmcv.dump(bbox_json_results, result_files['bbox'])
+            mmcv.dump(segm_json_results, result_files['segm'])
 
         return result_files
 
@@ -471,8 +530,16 @@ class CocoPanopticDataset(CocoDataset):
                 for k, v in zip(self.CLASSES, pq_results['classwise'].values())
             }
         print_panoptic_table(pq_results, classwise_results, logger=logger)
+        results = parse_pq_results(pq_results)
+        results['PQ_copypaste'] = (
+            f'{results["PQ"]:.3f} {results["SQ"]:.3f} '
+            f'{results["RQ"]:.3f} '
+            f'{results["PQ_th"]:.3f} {results["SQ_th"]:.3f} '
+            f'{results["RQ_th"]:.3f} '
+            f'{results["PQ_st"]:.3f} {results["SQ_st"]:.3f} '
+            f'{results["RQ_st"]:.3f}')
 
-        return parse_pq_results(pq_results)
+        return results
 
     def evaluate(self,
                  results,
@@ -501,7 +568,7 @@ class CocoPanopticDataset(CocoDataset):
         metrics = metric if isinstance(metric, list) else [metric]
         # Compatible with lowercase 'pq'
         metrics = ['PQ' if metric == 'pq' else metric for metric in metrics]
-        allowed_metrics = ['PQ']  # todo: support other metrics like 'bbox'
+        allowed_metrics = ['PQ', 'bbox', 'segm', 'proposal', 'proposal_fast']
         for metric in metrics:
             if metric not in allowed_metrics:
                 raise KeyError(f'metric {metric} is not supported')
@@ -516,6 +583,14 @@ class CocoPanopticDataset(CocoDataset):
                                                       outfile_prefix, logger,
                                                       classwise)
             eval_results.update(eval_pan_results)
+            metrics.remove('PQ')
+
+        if (('bbox' in metrics) or ('segm' in metrics)
+                or ('proposal' in metrics) or ('proposal_fast' in metrics)):
+            eval_ins_results = self.evaluate_ins_json(results, result_files,
+                                                      metrics, logger,
+                                                      classwise, **kwargs)
+            eval_results.update(eval_ins_results)
 
         if tmp_dir is not None:
             tmp_dir.cleanup()
