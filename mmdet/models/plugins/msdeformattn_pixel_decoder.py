@@ -8,6 +8,8 @@ from mmcv.cnn.bricks.transformer import (build_positional_encoding,
                                          build_transformer_layer_sequence)
 from mmcv.runner import BaseModule, ModuleList
 
+from mmdet.models.utils.transformer import MultiScaleDeformableAttention
+
 
 @PLUGIN_LAYERS.register_module()
 class MSDeformAttnPixelDecoder(BaseModule):
@@ -140,7 +142,17 @@ class MSDeformAttnPixelDecoder(BaseModule):
             caffe2_xavier_init(self.output_convs[i].conv, bias=0)
 
         caffe2_xavier_init(self.mask_feature, bias=0)
+
         normal_init(self.level_encoding, mean=0, std=1)
+        for p in self.encoder.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_normal_(p)
+
+        # init_weights defined in MultiScaleDeformableAttention
+        for layer in self.encoder.layers:
+            for attn in layer.attentions:
+                if isinstance(attn, MultiScaleDeformableAttention):
+                    attn.init_weights()
 
     def get_valid_ratio(self, mask):
         """Get the valid radios of feature maps of all  level."""
