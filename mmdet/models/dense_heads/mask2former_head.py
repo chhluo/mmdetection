@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmcv.cnn import Conv2d, build_plugin_layer, kaiming_init
+from mmcv.cnn import Conv2d, build_plugin_layer, caffe2_xavier_init
 from mmcv.cnn.bricks.transformer import (build_positional_encoding,
                                          build_transformer_layer_sequence)
 from mmcv.ops import point_sample
@@ -166,7 +166,8 @@ class Mask2FormerHead(MaskFormerHead):
 
     def init_weights(self):
         for m in self.decoder_input_projs:
-            kaiming_init(m, a=1)
+            if isinstance(m, Conv2d):
+                caffe2_xavier_init(m, bias=0)
 
     def _get_target_single(self, cls_score, mask_pred, gt_labels, gt_masks,
                            img_metas):

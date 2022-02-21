@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmcv.cnn import (PLUGIN_LAYERS, Conv2d, ConvModule, kaiming_init,
+from mmcv.cnn import (PLUGIN_LAYERS, Conv2d, ConvModule, caffe2_xavier_init,
                       normal_init, xavier_init)
 from mmcv.cnn.bricks.transformer import (build_positional_encoding,
                                          build_transformer_layer_sequence)
@@ -129,17 +129,17 @@ class MSDeformAttnPixelDecoder(BaseModule):
     def init_weights(self):
         for i in range(0, self.num_encoder_feat_levels):
             xavier_init(
-                self.input_projs[i].conv.weight,
+                self.input_projs[i].conv,
                 gain=1,
                 bias=0,
-                distribution='normal')
+                distribution='uniform')
 
         for i in range(0,
                        self.num_input_levels - self.num_encoder_feat_levels):
-            kaiming_init(self.lateral_convs[i].conv.weight, a=1)
-            kaiming_init(self.output_convs[i].conv.weight, a=1)
+            caffe2_xavier_init(self.lateral_convs[i].conv, bias=0)
+            caffe2_xavier_init(self.output_convs[i].conv, bias=0)
 
-        kaiming_init(self.mask_feature, a=1)
+        caffe2_xavier_init(self.mask_feature, bias=0)
         normal_init(self.level_encoding, mean=0, std=1)
 
     def get_valid_ratio(self, mask):
