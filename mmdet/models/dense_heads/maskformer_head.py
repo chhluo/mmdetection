@@ -163,7 +163,7 @@ class MaskFormerHead(AnchorFreeHead):
         num_things_list = [self.num_things_classes] * len(gt_labels_list)
         num_stuff_list = [self.num_stuff_classes] * len(gt_labels_list)
         if gt_semantic_segs == None:
-            gt_semantic_segs = [None for x in gt_labels_list]
+            gt_semantic_segs = [None] * len(gt_labels_list)
 
         targets = multi_apply(preprocess_panoptic_gt, gt_labels_list,
                               gt_masks_list, gt_semantic_segs, num_things_list, 
