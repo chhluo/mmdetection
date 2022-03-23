@@ -134,7 +134,8 @@ class MaskFormerHead(AnchorFreeHead):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-    def preprocess_gt(self, gt_labels_list, gt_masks_list, gt_semantic_segs):
+    def preprocess_gt(self, gt_labels_list, gt_masks_list, gt_semantic_segs,
+                      img_metas):
         """Preprocess the ground truth for all images.
 
         Args:
@@ -161,10 +162,12 @@ class MaskFormerHead(AnchorFreeHead):
         """
         num_things_list = [self.num_things_classes] * len(gt_labels_list)
         num_stuff_list = [self.num_stuff_classes] * len(gt_labels_list)
+        if gt_semantic_segs == None:
+            gt_semantic_segs = [None for x in gt_labels_list]
 
         targets = multi_apply(preprocess_panoptic_gt, gt_labels_list,
-                              gt_masks_list, gt_semantic_segs, num_things_list,
-                              num_stuff_list)
+                              gt_masks_list, gt_semantic_segs, num_things_list, 
+                              num_stuff_list, img_metas)
         labels, masks = targets
         return labels, masks
 
@@ -512,8 +515,10 @@ class MaskFormerHead(AnchorFreeHead):
         all_cls_scores, all_mask_preds = self(feats, img_metas)
 
         # preprocess ground truth
-        gt_labels, gt_masks = self.preprocess_gt(gt_labels, gt_masks,
-                                                 gt_semantic_seg)
+        gt_labels, gt_masks = self.preprocess_gt(gt_labels, 
+                                                 gt_masks,
+                                                 gt_semantic_seg,
+                                                 img_metas)
 
         # loss
         losses = self.loss(all_cls_scores, all_mask_preds, gt_labels, gt_masks,

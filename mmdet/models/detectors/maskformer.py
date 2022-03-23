@@ -67,7 +67,7 @@ class MaskFormer(SingleStageDetector):
                       gt_bboxes,
                       gt_labels,
                       gt_masks,
-                      gt_semantic_seg,
+                      gt_semantic_seg=None,
                       gt_bboxes_ignore=None,
                       **kargs):
         """
@@ -86,6 +86,7 @@ class MaskFormer(SingleStageDetector):
                 used if the architecture supports a segmentation task.
             gt_semantic_seg (list[tensor]): semantic segmentation mask for
                 images.
+                Defaults to None.
             gt_bboxes_ignore (list[Tensor]): specify which bounding
                 boxes can be ignored when computing the loss.
                 Defaults to None.

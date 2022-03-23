@@ -3,7 +3,7 @@ import torch
 
 
 def preprocess_panoptic_gt(gt_labels, gt_masks, gt_semantic_seg, num_things,
-                           num_stuff):
+                           num_stuff, img_metas):
     """Preprocess the ground truth for a image.
 
     Args:
@@ -29,11 +29,17 @@ def preprocess_panoptic_gt(gt_labels, gt_masks, gt_semantic_seg, num_things,
                 shape (n, h, w).
     """
     num_classes = num_things + num_stuff
+    
+    things_masks = gt_masks.pad(img_metas['pad_shape'][:2], pad_val=0)\
+        .to_tensor(dtype=torch.bool, device=gt_labels.device)
+
+    if gt_semantic_seg == None:
+        masks = things_masks.long()
+        labels = gt_labels
+        return labels, masks
+
     things_labels = gt_labels
     gt_semantic_seg = gt_semantic_seg.squeeze(0)
-
-    things_masks = gt_masks.pad(gt_semantic_seg.shape[-2:], pad_val=0)\
-        .to_tensor(dtype=torch.bool, device=gt_labels.device)
 
     semantic_labels = torch.unique(
         gt_semantic_seg,
@@ -60,3 +66,7 @@ def preprocess_panoptic_gt(gt_labels, gt_masks, gt_semantic_seg, num_things,
 
     masks = masks.long()
     return labels, masks
+
+
+
+
