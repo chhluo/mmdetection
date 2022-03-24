@@ -163,20 +163,26 @@ class MaskFormer(SingleStageDetector):
     def onnx_export(self, img, img_metas):
         raise NotImplementedError
 
-    def show_result(self,
-                    img,
-                    result,
-                    score_thr=0.3,
-                    bbox_color=(72, 101, 241),
-                    text_color=(72, 101, 241),
-                    mask_color=None,
-                    thickness=2,
-                    font_size=13,
-                    win_name='',
-                    show=False,
-                    wait_time=0,
-                    out_file=None):
-        """Draw `result` over `img`.
+    def show_result(*args,**kwargs)
+        if self.num_stuff_classes == 0:
+            super().show_result(*args,**kwargs)
+        else:
+            self.show_pan_result(*args,**kwargs)
+
+    def show_pan_result(self,
+                        img,
+                        result,
+                        score_thr=0.3,
+                        bbox_color=(72, 101, 241),
+                        text_color=(72, 101, 241),
+                        mask_color=None,
+                        thickness=2,
+                        font_size=13,
+                        win_name='',
+                        show=False,
+                        wait_time=0,
+                        out_file=None):
+        """Draw `panoptic result` over `img`.
 
         Args:
             img (str or Tensor): The image to be displayed.
