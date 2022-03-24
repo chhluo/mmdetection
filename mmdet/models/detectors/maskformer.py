@@ -152,6 +152,9 @@ class MaskFormer(SingleStageDetector):
             assert 'sem_results' not in results[i], 'segmantic segmentation '\
                 'results are not supported yet.'
 
+        if self.num_stuff_classes == 0:
+            results = [res['ins_results'] for res in results]
+
         return results
 
     def aug_test(self, imgs, img_metas, **kwargs):
