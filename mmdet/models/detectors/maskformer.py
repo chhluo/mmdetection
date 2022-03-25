@@ -42,6 +42,9 @@ class MaskFormer(SingleStageDetector):
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
+        
+        if self.num_stuff_classes > 0:
+            self.show_result = self.show_pan_result
 
     def forward_dummy(self, img, img_metas):
         """Used for computing network flops. See
@@ -162,12 +165,6 @@ class MaskFormer(SingleStageDetector):
 
     def onnx_export(self, img, img_metas):
         raise NotImplementedError
-
-    def show_result(*args,**kwargs)
-        if self.num_stuff_classes == 0:
-            super().show_result(*args,**kwargs)
-        else:
-            self.show_pan_result(*args,**kwargs)
 
     def show_pan_result(self,
                         img,
