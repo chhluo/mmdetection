@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'WIDERFaceDataset'
-data_root = 'other_data/WIDERFace/'
+data_root = 'data/WIDERFace/'
 # file_client_args = dict(
 #     backend='petrel',
 #     path_mapping=dict({
