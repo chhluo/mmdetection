@@ -44,21 +44,17 @@ test_pipeline = [
 dataset_type = 'WIDERFaceDataset'
 data_root = 'data/WIDERFace/'
 train_dataloader = dict(
-    _delete_=True,
     batch_size=32,
     num_workers=8,
-    persistent_workers=True,
-    drop_last=False,
-    sampler=dict(type='DefaultSampler', shuffle=True),
-    batch_sampler=dict(type='AspectRatioBatchSampler'),
     dataset=dict(
+        _delete_=True,
         type='RepeatDataset',
         times=2,
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file='train.txt',
-            data_prefix=dict(img='WIDER_train'),
+            ann_file='val.txt',
+            data_prefix=dict(img='WIDER_val'),
             filter_cfg=dict(
                 filter_empty_gt=True, bbox_min_size=17, min_size=32),
             pipeline=train_pipeline)))
