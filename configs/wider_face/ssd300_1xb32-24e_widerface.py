@@ -47,6 +47,10 @@ train_dataloader = dict(
     _delete_=True,
     batch_size=32,
     num_workers=8,
+    persistent_workers=True,
+    drop_last=False,
+    sampler=dict(type='DefaultSampler', shuffle=True),
+    batch_sampler=dict(type='AspectRatioBatchSampler'),
     dataset=dict(
         type='RepeatDataset',
         times=2,
