@@ -53,8 +53,8 @@ train_dataloader = dict(
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file='val.txt',
-            data_prefix=dict(img='WIDER_val'),
+            ann_file='train.txt',
+            data_prefix=dict(img='WIDER_train'),
             filter_cfg=dict(
                 filter_empty_gt=True, bbox_min_size=17, min_size=32),
             pipeline=train_pipeline)))
